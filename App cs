@@ -1,0 +1,23 @@
+using System.Windows;
+
+namespace ChatClient
+{
+    public partial class App : Application
+    {
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+
+            var login = new LoginWindow();
+            if (login.ShowDialog() == true)
+            {
+                var chat = new ChatWindow(login.UserName, login.RoomName);
+                chat.Show();
+            }
+            else
+            {
+                Shutdown();
+            }
+        }
+    }
+}
