@@ -1,0 +1,86 @@
+using Microsoft.AspNetCore.SignalR.Client;
+using System.Windows;
+using System.Windows.Input;
+
+namespace ChatClient
+{
+    public partial class ChatWindow : Window
+    {
+        private readonly HubConnection _connection;
+        private readonly string _userName;
+        private readonly string _roomName;
+
+        public ChatWindow(string userName, string roomName)
+        {
+            InitializeComponent();
+
+            _userName = userName;
+            _roomName = roomName;
+            TxtHeader.Text = $"Комната: {roomName}  |  Пользователь: {userName}";
+
+            // Настройка подключения
+            _connection = new HubConnectionBuilder()
+                .WithUrl("http://localhost:5000/chat")
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Callback: получение сообщения от сервера
+            _connection.On<string, string>("ReceiveMessage", (sender, message) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    LstMessages.Items.Add($"[{sender}]: {message}");
+                    LstMessages.ScrollIntoView(LstMessages.Items[^1]);
+                });
+            });
+
+            Loaded += async (_, _) => await ConnectAsync();
+        }
+
+        private async Task ConnectAsync()
+        {
+            try
+            {
+                await _connection.StartAsync();
+                // Войти в комнату
+                await _connection.InvokeAsync("JoinRoom", _roomName, _userName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка подключения:\n{ex.Message}", "Ошибка",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private async void BtnSend_Click(object sender, RoutedEventArgs e)
+            => await SendMessageAsync();
+
+        private async void TxtMessage_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+                await SendMessageAsync();
+        }
+
+        private async Task SendMessageAsync()
+        {
+            var text = TxtMessage.Text.Trim();
+            if (string.IsNullOrEmpty(text)) return;
+
+            try
+            {
+                await _connection.InvokeAsync("SendMessage", text);
+                TxtMessage.Clear();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка отправки:\n{ex.Message}");
+            }
+        }
+
+        private async void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            if (_connection.State == HubConnectionState.Connected)
+                await _connection.StopAsync();
+        }
+    }
+}
